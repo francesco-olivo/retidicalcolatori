@@ -1,19 +1,7 @@
-import java.io.BufferedReader;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class Client {
 
@@ -42,7 +30,6 @@ public class Client {
 			System.exit(-1);
 		}
 
-		Socket socket = null;
 		FileInputStream inputFile = null;
 		DataInputStream inputSocket = null;
 		DataOutputStream outputSocket = null;
@@ -56,33 +43,61 @@ public class Client {
 			e.printStackTrace();
 		}
 
-		Path dir = Path.of(request_dir);
+		File dir = new File(request_dir);
+		//Path dir = Path.of(request_dir);
 
-		if (!Files.exists(dir)) {
+		if (!dir.isDirectory()) {
 			System.out.println("La directory '" + request_dir + "' non esiste.");
 			System.exit(-1);
 		}
 
-		try { // creazione socket
-			socket = new Socket(addr, port);
+		try (Socket socket = new Socket(addr, port)) { // creazione socket
 			socket.setSoTimeout(30000);
 			inputSocket = new DataInputStream(socket.getInputStream());
 			outputSocket = new DataOutputStream(socket.getOutputStream());
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 
-		List<File> files = null;
-		//try-with-resources per chiudere lo stream
-		try (Stream<Path> stream = Files.walk(dir)) {
-			stream.filter(Files::isRegularFile).map(Path::toFile).collect(Collectors.toList());
+			//TODO: rendere la lista array
+			File[] files = dir.listFiles();
+			/*
+			List<File> files = null;
+			// try-with-resources per chiudere lo stream
+			try (Stream<Path> stream = Files.walk(dir)) {
+				stream.filter(Files::isRegularFile).map(Path::toFile).collect(Collectors.toList());
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			 */
+
+			for (File f : files) {
+				if(f.length() > min_file_size) {
+					try {
+						// Utilizziamo il carattere ':' come separatore perché è un char vietato dal
+						// file system come nome file
+						outputSocket.writeUTF(f.getName() + ":" + f.length());
+						String response = inputSocket.readUTF();
+
+						// il server restituisce "true" se è il client è autorizzato a procedere
+						if (Boolean.parseBoolean(response)) {
+							// trasferisci il file
+							FileInputStream fis = new FileInputStream(f);
+							FileUtility.trasferisci_a_byte_file_binario(new DataInputStream(fis), outputSocket);
+							// close del file
+							fis.close();
+						} else {
+							System.out.println(f.getName() + " già presente sul file system del server");
+						}
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+
+			}
+			//chiusura socket
+			socket.shutdownInput();
+			socket.shutdownOutput();
+			socket.close();
 		} catch (IOException e) {
 			e.printStackTrace();
-		}
-		
-		List<String> requests = new ArrayList<>();
-		for (File f : files) {
-			requests.add(f.getName() + "," + f.length() + ",");
 		}
 
 	}
