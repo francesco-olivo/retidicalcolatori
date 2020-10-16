@@ -60,9 +60,11 @@ class PutFileServerThread extends Thread {
 	}
 
 	public void run() {
-		DataInputStream inSock;
+		DataInputStream inSock = null;
 		DataOutputStream outSock = null;
 		try {
+
+			//TODO: ciclo per prendere tutti i file
 			String nomeFile = null;
 			try // creazione stream
 			{
@@ -73,36 +75,22 @@ class PutFileServerThread extends Thread {
 			} catch (IOException ioe) {
 			} catch (Exception e) {
 			}
-			FileOutputStream outFile = null;
-			String esito;
+			DataOutputStream outFile = null;
 			// ricezione file: caso di errore
 			if (nomeFile == null) {
 				clientSocket.close();
 				return;
 			} else { // controllo esistenza file
 				File curFile = new File(nomeFile);
-				if (curFile.exists()) {
-					try // distruggo il vecchio file
-					{
-						esito = "File sovrascritto";
-						curFile.delete();
-					} catch (Exception e) {
-						return;
-					}
-				} else
-					esito = "Creato nuovo file";
-				outFile = new FileOutputStream(nomeFile);
-			}
-			try {
-				// FileUtility.trasferisci_a_byte_file_binario(inSock, new
-				// DataOutputStream(outFile));
-				outFile.close(); // chiusura file e socket
-				// NOTA: è il figlio che fa la close!
-				clientSocket.shutdownInput();
-				outSock.writeUTF(esito + ", file salvato lato server");
-				clientSocket.shutdownOutput();
-			} catch (SocketTimeoutException te) {
-			} catch (Exception e) {
+
+				//scrive true se il file non esiste e il client può procedere, false altrimenti
+				Boolean esito = Boolean.valueOf(!curFile.exists());
+				outSock.writeUTF(esito.toString());
+
+				outFile = new DataOutputStream(new FileOutputStream(nomeFile));
+				FileUtility.trasferisci_a_byte_file_binario(inSock, outFile);
+
+
 			}
 		} catch (Exception e) {
 			System.exit(3);
